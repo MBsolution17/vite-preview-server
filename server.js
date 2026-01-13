@@ -10,8 +10,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 5173;
-const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'];
+const PORT = parseInt(process.env.PORT || '5173', 10);
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(',').map(s => s.trim()) || ['http://localhost:3000'];
 
 // Middleware
 app.use(cors({ origin: ALLOWED_ORIGINS }));
@@ -49,25 +49,31 @@ app.post('/load-project', async (req, res) => {
     for (const file of files) {
       const filePath = join(projectPath, file.path);
       const fileDir = dirname(filePath);
-      
+
       await fs.mkdir(fileDir, { recursive: true });
       await fs.writeFile(filePath, file.content, 'utf-8');
     }
 
-    // Create Vite server for this project
+    // Create Vite server for this project (simplified config for Railway)
     const vite = await createViteServer({
       root: projectPath,
       server: {
         middlewareMode: true,
-        hmr: {
-          protocol: 'ws',
-          port: PORT + 1000 + projects.size // Dynamic HMR port
-        }
+        hmr: false // Disable HMR for Railway (simpler)
       },
       appType: 'custom',
+      css: {
+        // Skip postcss.config.js from project files
+        postcss: {}
+      },
       optimizeDeps: {
-        include: ['react', 'react-dom']
-      }
+        include: ['react', 'react-dom'],
+        esbuildOptions: {
+          // Handle JSX
+          loader: { '.js': 'jsx', '.ts': 'tsx' }
+        }
+      },
+      logLevel: 'error'
     });
 
     // Store project
@@ -83,15 +89,14 @@ app.post('/load-project', async (req, res) => {
     res.json({
       success: true,
       projectId,
-      previewUrl: `http://localhost:${PORT}/preview/${projectId}`,
-      hmrPort: PORT + 1000 + projects.size - 1
+      previewUrl: `/preview/${projectId}`
     });
 
   } catch (error) {
     console.error('Error loading project:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to load project',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -137,9 +142,9 @@ app.post('/update-file', async (req, res) => {
 
   } catch (error) {
     console.error('Error updating file:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to update file',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -167,7 +172,7 @@ setInterval(() => {
       console.log(`[${projectId}] Cleaning up old project...`);
       project.vite.close();
       projects.delete(projectId);
-      
+
       // Delete files (optional, can keep for cache)
       fs.rm(project.path, { recursive: true, force: true }).catch(console.error);
     }
@@ -184,10 +189,10 @@ app.listen(PORT, () => {
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received, closing servers...');
-  
+
   for (const [projectId, project] of projects.entries()) {
     await project.vite.close();
   }
-  
+
   process.exit(0);
 });
