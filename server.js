@@ -68,6 +68,7 @@ app.post('/load-project', async (req, res) => {
     // Create Vite server for this project (simplified config for Railway)
     const vite = await createViteServer({
       root: projectPath,
+      base: `/preview/${projectId}/`, // ✅ Vital for correct asset loading in iframe!
       server: {
         middlewareMode: true,
         hmr: false, // Disable HMR for Railway (simpler)
