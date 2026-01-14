@@ -188,6 +188,10 @@ app.use('/preview/:projectId', async (req, res, next) => {
   res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
 
+  // Restore original URL so Vite receives the full path including /preview/:id
+  // This is required because we set 'base' in Vite config
+  req.url = req.originalUrl;
+
   // Use Vite middleware to serve the project
   project.vite.middlewares(req, res, next);
 });
