@@ -68,6 +68,18 @@ app.post('/load-project', async (req, res) => {
     // Create Vite server for this project (simplified config for Railway)
     const vite = await createViteServer({
       root: projectPath,
+      plugins: [
+        // Inject <base> tag for correct asset paths in iframe
+        {
+          name: 'inject-base-tag',
+          transformIndexHtml(html) {
+            return html.replace(
+              '<head>',
+              `<head>\n    <base href="/preview/${projectId}/">`
+            );
+          }
+        }
+      ],
       server: {
         middlewareMode: true,
         hmr: false, // Disable HMR for Railway (simpler)
@@ -183,23 +195,7 @@ app.use('/preview/:projectId', async (req, res, next) => {
   const withoutPrefix = originalUrl.replace(`/preview/${projectId}`, '') || '/';
   req.url = withoutPrefix;
 
-  // If requesting index.html, inject <base> tag for correct asset paths
-  if (withoutPrefix === '/' || withoutPrefix === '/index.html') {
-    // Intercept response to inject base tag
-    const originalSend = res.send.bind(res);
-    res.send = function (body) {
-      if (typeof body === 'string' && body.includes('<head>')) {
-        // Inject <base> tag right after <head>
-        body = body.replace(
-          '<head>',
-          `<head>\n    <base href="/preview/${projectId}/">`
-        );
-      }
-      return originalSend(body);
-    };
-  }
-
-  // Use Vite middleware to serve the project
+  // Use Vite middleware to serve the project (base tag injected by plugin)
   project.vite.middlewares(req, res, next);
 });
 
