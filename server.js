@@ -68,7 +68,6 @@ app.post('/load-project', async (req, res) => {
     // Create Vite server for this project (simplified config for Railway)
     const vite = await createViteServer({
       root: projectPath,
-      base: `/preview/${projectId}/`, // ✅ Vital for correct asset loading in iframe!
       server: {
         middlewareMode: true,
         hmr: false, // Disable HMR for Railway (simpler)
@@ -171,26 +170,34 @@ app.use('/preview/:projectId', async (req, res, next) => {
     return res.status(404).send('Project not found');
   }
 
-  // Force iframe-friendly headers BEFORE Vite handles it
-  const originalSetHeader = res.setHeader.bind(res);
-  res.setHeader = function (name, value) {
-    // Block any X-Frame-Options header
-    if (name.toLowerCase() === 'x-frame-options') {
-      return this;
-    }
-    return originalSetHeader(name, value);
-  };
-
-  // Set our headers
+  // Force iframe-friendly headers
   res.removeHeader('X-Frame-Options');
   res.setHeader('Content-Security-Policy', "frame-ancestors *");
   res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
   res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
 
-  // Restore original URL so Vite receives the full path including /preview/:id
-  // This is required because we set 'base' in Vite config
-  req.url = req.originalUrl;
+  // Strip /preview/:projectId from URL for Vite
+  // e.g. /preview/123/src/main.tsx → /src/main.tsx
+  const originalUrl = req.originalUrl || req.url;
+  const withoutPrefix = originalUrl.replace(`/preview/${projectId}`, '') || '/';
+  req.url = withoutPrefix;
+
+  // If requesting index.html, inject <base> tag for correct asset paths
+  if (withoutPrefix === '/' || withoutPrefix === '/index.html') {
+    // Intercept response to inject base tag
+    const originalSend = res.send.bind(res);
+    res.send = function (body) {
+      if (typeof body === 'string' && body.includes('<head>')) {
+        // Inject <base> tag right after <head>
+        body = body.replace(
+          '<head>',
+          `<head>\n    <base href="/preview/${projectId}/">`
+        );
+      }
+      return originalSend(body);
+    };
+  }
 
   // Use Vite middleware to serve the project
   project.vite.middlewares(req, res, next);
