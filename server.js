@@ -70,7 +70,8 @@ app.post('/load-project', async (req, res) => {
       root: projectPath,
       server: {
         middlewareMode: true,
-        hmr: false // Disable HMR for Railway (simpler)
+        hmr: false, // Disable HMR for Railway (simpler)
+        allowedHosts: true // Allow all hosts (Railway, etc.)
       },
       appType: 'custom',
       css: {
