@@ -160,7 +160,7 @@ app.post('/update-file', async (req, res) => {
   }
 });
 
-// Serve preview
+// Serve preview with iframe-friendly headers
 app.use('/preview/:projectId', async (req, res, next) => {
   const { projectId } = req.params;
   const project = projects.get(projectId);
@@ -168,6 +168,23 @@ app.use('/preview/:projectId', async (req, res, next) => {
   if (!project) {
     return res.status(404).send('Project not found');
   }
+
+  // Force iframe-friendly headers BEFORE Vite handles it
+  const originalSetHeader = res.setHeader.bind(res);
+  res.setHeader = function (name, value) {
+    // Block any X-Frame-Options header
+    if (name.toLowerCase() === 'x-frame-options') {
+      return this;
+    }
+    return originalSetHeader(name, value);
+  };
+
+  // Set our headers
+  res.removeHeader('X-Frame-Options');
+  res.setHeader('Content-Security-Policy', "frame-ancestors *");
+  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
+  res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
 
   // Use Vite middleware to serve the project
   project.vite.middlewares(req, res, next);
