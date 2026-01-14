@@ -14,8 +14,19 @@ const PORT = parseInt(process.env.PORT || '5173', 10);
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(',').map(s => s.trim()) || ['http://localhost:3000'];
 
 // Middleware
-app.use(cors({ origin: ALLOWED_ORIGINS }));
+app.use(cors({
+  origin: ALLOWED_ORIGINS,
+  credentials: true
+}));
 app.use(express.json({ limit: '50mb' }));
+
+// Allow iframe embedding from any origin
+app.use((req, res, next) => {
+  res.removeHeader('X-Frame-Options');
+  res.setHeader('Content-Security-Policy', "frame-ancestors *");
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  next();
+});
 
 // Store active projects in memory
 const projects = new Map();
